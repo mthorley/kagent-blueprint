@@ -23,7 +23,7 @@ metadata:
   name: mcp-fetch
   namespace: kagent
 spec:
-  description: Generic HTTP fetch MCP server (mcp/fetch) used by the vulnerability-triage agent for NVD lookups.
+  description: Generic HTTP fetch MCP server (mcp/fetch).
   protocol: STREAMABLE_HTTP
   url: http://mcp-fetch.kagent:3000/mcp
   timeout: 30s
