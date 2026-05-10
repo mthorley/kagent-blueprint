@@ -7,3 +7,25 @@ resources:
   - kagent-crds-stack.yaml
   - kagent-stack.yaml
   - mcp-fetch.yaml
+
+# kagent-postgresql ships with very tight probe timeouts (3s/5s) that flap on
+# slow nodes (minikube/darwin, Pi-class). Postgres itself is fine — pg_isready
+# returns in ~300ms — but kubelet exec spawning occasionally exceeds the
+# window, killing the pod every few minutes. Relax the timings.
+patches:
+  - target:
+      kind: Deployment
+      name: kagent-postgresql
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/timeoutSeconds
+        value: 15
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/periodSeconds
+        value: 30
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/timeoutSeconds
+        value: 10
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/periodSeconds
+        value: 15
