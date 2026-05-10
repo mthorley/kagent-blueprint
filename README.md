@@ -2,6 +2,8 @@
 
 Basic setup to support declaritive and langchain BYO agents onto kagent.dev for vulnerability triage. Very simple and contrived, meant to show 
 
+![kagent ui](./docs/image.png)
+
 ## Agents
 
 | Agent | Type | What it does | Tools |
@@ -13,6 +15,63 @@ Basic setup to support declaritive and langchain BYO agents onto kagent.dev for 
 | `k8s-agent` | Declarative (shipped with kagent) | General Kubernetes troubleshooting | `kagent-tool-server` |
 
 The two triage orchestrators understand a `mode=parallel` / `mode=sequential` parameter (or natural-language equivalents). Sequential mode short-circuits: if NVD reports the CVE doesn't exist, KEV is skipped.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    user(["User<br/>(kagent UI)"])
+
+    subgraph cluster["Kubernetes (kagent namespace)"]
+        direction LR
+
+        subgraph orchestrators["Orchestrators"]
+            triage["vulnerability-triage-agent<br/>declarative + A2A"]
+            triagelg["vulnerability-triage-lg-agent<br/>BYO LangGraph"]
+        end
+
+        subgraph lookups["Lookup sub-agents"]
+            nvd["nvd-agent"]
+            kev["kev-agent"]
+        end
+
+        mcp["mcp-fetch<br/>generic HTTP fetcher<br/>(MCPServer + RemoteMCPServer)"]
+        k8s["k8s-agent<br/>(kagent-shipped)"]
+        tools["kagent-tool-server"]
+    end
+
+    subgraph external["External APIs"]
+        nvdapi["NVD REST API"]
+        cisa["CISA KEV JSON"]
+        anthropic["Anthropic API"]
+    end
+
+    user --> triage
+    user --> triagelg
+    user --> nvd
+    user --> kev
+    user --> k8s
+
+    triage -. A2A .-> nvd
+    triage -. A2A .-> kev
+    triagelg -. A2A .-> nvd
+    triagelg -. A2A .-> kev
+
+    nvd -- MCP --> mcp
+    kev -- MCP --> mcp
+    k8s -- MCP --> tools
+
+    mcp -- HTTPS --> nvdapi
+    mcp -- HTTPS --> cisa
+
+    triage -. LLM .-> anthropic
+    triagelg -. LLM .-> anthropic
+    nvd -. LLM .-> anthropic
+    kev -. LLM .-> anthropic
+    k8s -. LLM .-> anthropic
+```
+
+Solid arrows are tool calls (MCP, HTTPS); dotted arrows are A2A or LLM round-trips. The two orchestrators are interchangeable from the user's perspective — they expose the same skill but use different runtimes (declarative prompt vs Python LangGraph state machine).
 
 ## Layout
 
