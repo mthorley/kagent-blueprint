@@ -1,6 +1,6 @@
 # Agent K8s Demo
 
-Basic setup to support declaritive and langchain BYO agents onto kagent.dev for vulnerability triage. Very simple and contrived, meant to show 
+Basic setup to support declarative and langchain BYO agents onto kagent.dev for vulnerability triage. Very simple and contrived, meant to show agent deployments and orchestration using MCP and A2A.
 
 ![kagent ui](./docs/image.png)
 
