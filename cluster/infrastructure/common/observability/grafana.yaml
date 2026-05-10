@@ -1,0 +1,123 @@
+# Grafana with anonymous Admin auth (demo only) and Tempo pre-provisioned
+# as a data source. Reach it with: kubectl -n observability port-forward
+# svc/grafana 3000:3000 → http://localhost:3000/explore (Tempo selected).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana
+  namespace: observability
+data:
+  grafana.ini: |
+    [auth]
+    disable_login_form = true
+
+    [auth.anonymous]
+    enabled = true
+    org_role = Admin
+
+    [users]
+    default_theme = dark
+
+    [analytics]
+    reporting_enabled = false
+    check_for_updates = false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: observability
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        access: proxy
+        uid: tempo
+        url: http://tempo.observability.svc.cluster.local:3200
+        isDefault: true
+        jsonData:
+          httpMethod: GET
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+          search:
+            hide: false
+          traceQuery:
+            timeShiftEnabled: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: observability
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: observability
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.3.1
+          ports:
+            - { name: http, containerPort: 3000 }
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m,  memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          volumeMounts:
+            - { name: config,              mountPath: /etc/grafana/grafana.ini, subPath: grafana.ini }
+            - { name: datasources,         mountPath: /etc/grafana/provisioning/datasources }
+            - { name: dashboard-providers, mountPath: /etc/grafana/provisioning/dashboards }
+            - { name: dashboards,          mountPath: /var/lib/grafana-dashboards }
+            - { name: storage,             mountPath: /var/lib/grafana }
+      volumes:
+        - name: config
+          configMap:
+            name: grafana
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboard-providers
+          configMap:
+            name: grafana-dashboard-providers
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: storage
+          emptyDir: {}

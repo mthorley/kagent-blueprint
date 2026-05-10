@@ -1,0 +1,164 @@
+# Grafana dashboard provisioning. Dashboards in `grafana-dashboards` get
+# auto-loaded by Grafana on startup via the provisioning/dashboards entry
+# below. Add new dashboards by adding files to the ConfigMap.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-providers
+  namespace: observability
+data:
+  providers.yaml: |
+    apiVersion: 1
+    providers:
+      - name: kagent
+        orgId: 1
+        folder: kagent
+        type: file
+        disableDeletion: true
+        editable: true
+        allowUiUpdates: true
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana-dashboards
+          foldersFromFilesStructure: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: observability
+data:
+  kagent-traces.json: |
+    {
+      "uid": "kagent-traces",
+      "title": "kagent traces",
+      "tags": ["kagent", "tempo", "traces"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "time": { "from": "now-1h", "to": "now" },
+      "refresh": "30s",
+      "templating": {
+        "list": [
+          {
+            "name": "service",
+            "label": "Service",
+            "type": "query",
+            "datasource": { "type": "tempo", "uid": "tempo" },
+            "query": { "type": "1", "tag": "service.name" },
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": { "selected": false, "text": ["All"], "value": ["$__all"] },
+            "refresh": 2,
+            "sort": 1
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "table",
+          "title": "Recent traces — $service",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceqlSearch",
+              "tableType": "traces",
+              "limit": 100,
+              "filters": [
+                {
+                  "id": "service-name",
+                  "tag": "service.name",
+                  "operator": "=~",
+                  "scope": "resource",
+                  "value": "$service",
+                  "valueType": "string"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "table",
+          "title": "Errors",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "gridPos": { "x": 0, "y": 12, "w": 12, "h": 10 },
+          "options": { "showHeader": true, "cellHeight": "sm" },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceqlSearch",
+              "tableType": "traces",
+              "limit": 50,
+              "filters": [
+                {
+                  "id": "service-name",
+                  "tag": "service.name",
+                  "operator": "=~",
+                  "scope": "resource",
+                  "value": "$service",
+                  "valueType": "string"
+                },
+                {
+                  "id": "status",
+                  "tag": "status",
+                  "operator": "=",
+                  "scope": "intrinsic",
+                  "value": "error",
+                  "valueType": "keyword"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "table",
+          "title": "Slowest traces",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "gridPos": { "x": 12, "y": 12, "w": 12, "h": 10 },
+          "options": { "showHeader": true, "cellHeight": "sm" },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceql",
+              "query": "{ resource.service.name =~ \"$service\" } | select(duration) | sort by(duration) desc",
+              "limit": 20,
+              "tableType": "traces"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "LLM calls (gen_ai spans)",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "gridPos": { "x": 0, "y": 22, "w": 24, "h": 12 },
+          "description": "Spans with gen_ai.* attributes — Anthropic / model invocations from kagent runtimes.",
+          "options": { "showHeader": true, "cellHeight": "sm" },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceql",
+              "query": "{ resource.service.name =~ \"$service\" && span.gen_ai.system != \"\" }",
+              "limit": 50,
+              "tableType": "spans"
+            }
+          ]
+        }
+      ]
+    }

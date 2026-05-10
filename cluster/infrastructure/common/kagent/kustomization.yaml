@@ -29,3 +29,44 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/readinessProbe/periodSeconds
         value: 15
+
+  # Wire kagent into the OTel Collector in the observability namespace. The
+  # controller injects these env vars into every agent runtime pod it
+  # generates (Declarative + BYO + SandboxAgent), so flipping them here
+  # turns on tracing for the whole agent fleet.
+  - target:
+      kind: ConfigMap
+      name: kagent-controller
+    patch: |
+      - op: replace
+        path: /data/OTEL_TRACING_ENABLED
+        value: "true"
+      - op: add
+        path: /data/OTEL_EXPORTER_OTLP_ENDPOINT
+        value: "http://otel-collector.observability.svc.cluster.local:4317"
+      - op: add
+        path: /data/OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        value: "true"
+
+  # kagent-tools ships with OTEL_EXPORTER_OTLP_ENDPOINT hardcoded to
+  # host.docker.internal:4317 (intended for local dev). Repoint at the
+  # in-cluster collector and enable tracing. Strategic merge by env var
+  # name so changes in upstream order don't silently break us.
+  - target:
+      kind: Deployment
+      name: kagent-tools
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: kagent-tools
+      spec:
+        template:
+          spec:
+            containers:
+              - name: tools
+                env:
+                  - name: OTEL_TRACING_ENABLED
+                    value: "true"
+                  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                    value: "http://otel-collector.observability.svc.cluster.local:4317"
