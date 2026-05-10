@@ -74,6 +74,8 @@ spec:
         apiGroup: kagent.dev
         toolNames:
         - fetch
+        requireApproval:
+        - fetch
     a2aConfig:
       skills:
         - id: kev-lookup
